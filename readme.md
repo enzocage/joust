@@ -2,6 +2,8 @@
 
 A high-end, web-based arcade replica of the 1982 classic **Joust**, themed with the visual styling and sound characteristics of the Commodore 64 (C64) home computer system. 
 
+## 🎮 Play Game Live: [enzocage.de/code/joust](https://enzocage.de/code/joust)
+
 ![C64 Joust Promo Art](pic.png)
 
 *Gameplay Screenshot:*
