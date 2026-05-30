@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>C64 Joust - Enhanced Edition</title>
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  <header>
+    <h1>C64 JOUST</h1>
+    <p class="subtitle">SID Sound Engine • Enhanced Retro Physics • Custom Music</p>
+  </header>
+
+  <div class="monitor-container">
+    <div class="c64-border" id="screenBorder">
+      <div class="crt-screen">
+        <canvas id="gameCanvas" width="640" height="400"></canvas>
+        
+        <!-- Welcome Overlay -->
+        <div id="startOverlay" class="screen-overlay">
+          <h2 class="retro-title">READY.</h2>
+          <button id="startBtn" class="retro-btn">LOAD "JOUST",8,1</button>
+          
+          <div class="instructions-panel">
+            <h3>HOW TO PLAY:</h3>
+            <ul>
+              <li><span>FLAP</span><span class="key-tag">SPACE / W / UP</span></li>
+              <li><span>MOVE</span><span class="key-tag">A/D or LEFT/RIGHT</span></li>
+              <li><span>SOUND FX</span><span class="key-tag" id="musicStatus">ON</span></li>
+            </ul>
+          </div>
+
+          <!-- Leaderboard Panel -->
+          <div class="instructions-panel" style="margin-top: 10px; width: 100%;">
+            <h3 style="color: #f5bde6; text-align: center; margin-bottom: 5px;">TOP GLADIATORS</h3>
+            <ol id="leaderboardList" style="font-family: monospace; font-size: 0.85rem; padding-left: 20px; color: #b4e880;"></ol>
+          </div>
+        </div>
+
+        <!-- Name Input / Game Over Overlay -->
+        <div id="gameOverOverlay" class="screen-overlay hidden">
+          <h2 class="retro-title" style="color: #b33629;">GAME OVER</h2>
+          <p id="finalScore" style="font-family: 'Press Start 2P', monospace; font-size: 0.85rem; margin-bottom: 12px; color: #58b043;"></p>
+          
+          <!-- Leaderboard Placement Name Entry -->
+          <div id="nameEntryContainer" class="hidden" style="margin-bottom: 15px;">
+            <p style="font-family: 'Press Start 2P', monospace; font-size: 0.65rem; color: #e0def4; margin-bottom: 10px;">NEW HIGH SCORE! ENTER INITIALS:</p>
+            <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 10px;">
+              <input type="text" id="initialsInput" maxlength="3" value="AAA" style="font-family: 'Press Start 2P', monospace; font-size: 1.2rem; text-align: center; width: 100px; background: #111; color: #ffeb3b; border: 3px solid #603c90; border-radius: 4px; text-transform: uppercase;">
+            </div>
+            <button id="submitScoreBtn" class="retro-btn" style="font-size: 0.65rem; padding: 6px 12px;">SUBMIT</button>
+          </div>
+
+          <button id="restartBtn" class="retro-btn">RUN</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- On-Screen Controls for Mobile -->
+  <div class="mobile-controls">
+    <div class="control-group">
+      <button class="mobile-btn" id="btnLeft">◀</button>
+      <button class="mobile-btn" id="btnRight">▶</button>
+    </div>
+    <div class="control-group">
+      <button class="mobile-btn flap-btn" id="btnFlap">FLAP</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

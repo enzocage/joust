@@ -1,0 +1,328 @@
+/* Reset and Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Outfit:wght@400;600;800&display=swap');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+body {
+  background: #0f0c1b;
+  background-image: radial-gradient(circle at center, #1b1635 0%, #080610 100%);
+  color: #e0def4;
+  font-family: 'Outfit', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 10px;
+}
+
+/* Page Header and Container */
+header {
+  text-align: center;
+  margin-bottom: 12px;
+  z-index: 10;
+}
+
+h1 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 1.8rem;
+  color: #f5bde6;
+  text-shadow: 0 0 10px rgba(245, 189, 230, 0.6), 3px 3px 0px #5b3e94;
+  letter-spacing: -1px;
+}
+
+p.subtitle {
+  font-size: 0.95rem;
+  color: #9ccfd8;
+  margin-top: 4px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+/* C64 Retro Monitor Simulator */
+.monitor-container {
+  position: relative;
+  background: #2a2d3d; /* Retro monitor plastic */
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.8),
+    inset 0 4px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.4);
+  border: 4px solid #3e4259;
+  max-width: 900px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* The famous C64 Border area */
+.c64-border {
+  background-color: #3b5dc9; /* C64 Outer Blue */
+  padding: 30px;
+  border-radius: 8px;
+  transition: background-color 0.05s ease;
+  width: 100%;
+  max-width: 800px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
+}
+
+/* Custom C64 Border Flashes */
+.c64-border.flash-red {
+  background-color: #b33629 !important;
+}
+.c64-border.flash-green {
+  background-color: #58b043 !important;
+}
+.c64-border.flash-white {
+  background-color: #ffffff !important;
+}
+.c64-border.flash-yellow {
+  background-color: #d8c450 !important;
+}
+
+/* CRT Screen Wrapper */
+.crt-screen {
+  position: relative;
+  background: #000;
+  overflow: hidden;
+  border: 12px solid #000; /* Screen bezel */
+  border-radius: 6px;
+  box-shadow: inset 0 0 80px rgba(0, 0, 0, 1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Curved Screen effect */
+.crt-screen::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: radial-gradient(circle at center, transparent 60%, rgba(0, 0, 0, 0.4) 100%);
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* Scanlines overlay */
+.crt-screen::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.3) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.04), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.04));
+  background-size: 100% 4px, 6px 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Game Canvas */
+#gameCanvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  z-index: 2;
+  transition: transform 0.05s ease; /* Supports Screen Shake */
+}
+
+/* Glassmorphism User Interface Overlays on screen */
+.screen-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 6;
+  background: rgba(10, 8, 20, 0.88);
+  backdrop-filter: blur(4px);
+  text-align: center;
+  padding: 20px;
+  transition: opacity 0.3s ease;
+}
+
+.screen-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+  display: none !important;
+}
+
+.retro-title {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 1.5rem;
+  color: #f5bde6;
+  margin-bottom: 15px;
+  animation: pulse 1.5s infinite alternate;
+}
+
+.retro-btn {
+  font-family: 'Press Start 2P', cursive;
+  background-color: #5b3e94;
+  color: #ffffff;
+  border: 4px solid #f5bde6;
+  padding: 12px 24px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 0 #3a2267;
+  margin: 10px 0;
+}
+
+.retro-btn:hover {
+  background-color: #6e4fa8;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 #3a2267;
+}
+
+.retro-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #3a2267;
+}
+
+.instructions-panel {
+  max-width: 480px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 10px;
+  text-align: left;
+}
+
+.instructions-panel h3 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.75rem;
+  color: #9ccfd8;
+  margin-bottom: 8px;
+}
+
+.instructions-panel ul {
+  list-style: none;
+}
+
+.instructions-panel li {
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+  color: #e0def4;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+}
+
+.key-tag {
+  background: #3e4259;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-weight: bold;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Mobile Controls Overlay */
+.mobile-controls {
+  display: none;
+  width: 100%;
+  max-width: 800px;
+  justify-content: space-between;
+  margin-top: 15px;
+  padding: 0 10px;
+  z-index: 10;
+}
+
+.control-group {
+  display: flex;
+  gap: 15px;
+}
+
+.mobile-btn {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  transition: all 0.1s ease;
+}
+
+.mobile-btn:active {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(0.9);
+}
+
+.mobile-btn.flap-btn {
+  width: 90px;
+  height: 90px;
+  border-radius: 16px;
+  background: rgba(245, 189, 230, 0.15);
+  border-color: rgba(245, 189, 230, 0.4);
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.75rem;
+}
+
+.mobile-btn.flap-btn:active {
+  background: rgba(245, 189, 230, 0.3);
+}
+
+/* Media query to display mobile controls on touch devices */
+@media (max-width: 900px) {
+  .mobile-controls {
+    display: flex;
+  }
+}
+
+/* Keyframe animations */
+@keyframes pulse {
+  from {
+    text-shadow: 0 0 10px rgba(245, 189, 230, 0.6), 2px 2px 0px #5b3e94;
+  }
+  to {
+    text-shadow: 0 0 20px rgba(245, 189, 230, 0.9), 2px 2px 0px #5b3e94;
+  }
+}
+
+#startBtn {
+  animation: buttonBlink 1.2s infinite ease-in-out;
+}
+
+@keyframes buttonBlink {
+  0%, 100% {
+    background-color: #5b3e94;
+    border-color: #f5bde6;
+    box-shadow: 0 4px 0 #3a2267, 0 0 10px rgba(245, 189, 230, 0.4);
+  }
+  50% {
+    background-color: #835cc9;
+    border-color: #ffffff;
+    box-shadow: 0 4px 0 #3a2267, 0 0 25px rgba(255, 255, 255, 0.7);
+  }
+}
+
