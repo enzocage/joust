@@ -4,6 +4,9 @@ A high-end, web-based arcade replica of the 1982 classic **Joust**, themed with 
 
 ![C64 Joust Promo Art](pic.png)
 
+*Gameplay Screenshot:*
+![C64 Joust Gameplay Screenshot](screenshot.png)
+
 ## Features
 
 ### 📺 Retro CRT Bezel Simulator
