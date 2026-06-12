@@ -1,3 +1,14 @@
+// ============================================================
+//  C64 JOUST — DEMOSCENE EDITION
+//  15 visual tricks of the late C64 demo scene:
+//  1. Copper/Raster bars   2. Sine scroller      3. Color cycling
+//  4. Plasma               5. Parallax starfield 6. Sprite ghosting (trails)
+//  7. Bouncing rainbow logo (DYCP)               8. Glitch/noise transitions
+//  9. Border flashes      10. CRT scanlines     11. SID arpeggio music
+// 12. Wavy big-pixel typography                 13. Vector balls
+// 14. Perspective checkerboard floor            15. Interference circles
+// ============================================================
+
 // --- C64 Palette ---
 const C64 = {
   black: '#000000',
@@ -18,372 +29,196 @@ const C64 = {
   lightGrey: '#B0B0B0'
 };
 
-// --- Web Audio API Synth (C64 SID Emulator v2) ---
+// Rainbow cycle palette (classic copper bar gradient order)
+const RAINBOW = [
+  '#882000', '#C86400', '#D8C450', '#B4E880', '#509C40',
+  '#68B0C0', '#A0B0E0', '#304090', '#603C90', '#C07060'
+];
+function rainbow(i) {
+  return RAINBOW[((Math.floor(i) % RAINBOW.length) + RAINBOW.length) % RAINBOW.length];
+}
+
+// --- Web Audio API Synth (C64 SID Emulator v3) ---
 class RetroSynth {
   constructor() {
     this.ctx = null;
-    this.isMuted = false;
+    this.isMuted = false;      // sound effects
+    this.musicMuted = false;   // background music only
+    this.musicStep = 0;
+    this.musicTimer = null;
   }
 
   init() {
     if (!this.ctx) {
       this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.startMusic();
     }
   }
 
-  playFlap() {
-    if (!this.ctx || this.isMuted) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(140, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(360, this.ctx.currentTime + 0.12);
-    gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.12);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.12);
+  tone(type, f0, f1, t, vol, delay = 0) {
+    if (this.isMuted) return;
+    this._tone(type, f0, f1, t, vol, delay);
   }
 
-  // Sound 7: Heavy Launch Flap
-  playFlapLaunch() {
-    if (!this.ctx || this.isMuted) return;
+  // raw tone without the SFX mute check (used by the music channel)
+  _tone(type, f0, f1, t, vol, delay = 0) {
+    if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
-    const sub = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
-    
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(90, this.ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(220, this.ctx.currentTime + 0.18);
-
-    sub.type = 'triangle';
-    sub.frequency.setValueAtTime(45, this.ctx.currentTime);
-    sub.frequency.linearRampToValueAtTime(110, this.ctx.currentTime + 0.18);
-    
-    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.18);
-    
+    const start = this.ctx.currentTime + delay;
+    osc.type = type;
+    osc.frequency.setValueAtTime(f0, start);
+    if (f1 !== f0) osc.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), start + t);
+    gain.gain.setValueAtTime(vol, start);
+    gain.gain.linearRampToValueAtTime(0.001, start + t);
     osc.connect(gain);
-    sub.connect(gain);
     gain.connect(this.ctx.destination);
-    
-    osc.start();
-    sub.start();
-    osc.stop(this.ctx.currentTime + 0.18);
-    sub.stop(this.ctx.currentTime + 0.18);
+    osc.start(start);
+    osc.stop(start + t);
   }
 
-  playJoust() {
+  noiseBurst(t, vol, filterFrom = 4000, filterTo = 400) {
     if (!this.ctx || this.isMuted) return;
-    const osc = this.ctx.createOscillator();
-    const metal = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(200, this.ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(50, this.ctx.currentTime + 0.25);
-
-    metal.type = 'sine';
-    metal.frequency.setValueAtTime(1800, this.ctx.currentTime);
-    metal.frequency.exponentialRampToValueAtTime(900, this.ctx.currentTime + 0.12);
-    
-    const bufferSize = this.ctx.sampleRate * 0.18;
+    const bufferSize = this.ctx.sampleRate * t;
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
     const noise = this.ctx.createBufferSource();
     noise.buffer = buffer;
-    
-    gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
-    
-    osc.connect(gain);
-    metal.connect(gain);
-    noise.connect(gain);
-    gain.connect(this.ctx.destination);
-    
-    osc.start();
-    metal.start();
-    noise.start();
-    osc.stop(this.ctx.currentTime + 0.25);
-    metal.stop(this.ctx.currentTime + 0.25);
-    noise.stop(this.ctx.currentTime + 0.25);
-  }
-
-  playShieldBreak() {
-    if (!this.ctx || this.isMuted) return;
-    const osc = this.ctx.createOscillator();
-    const osc2 = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(2000, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.45);
-
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(2400, this.ctx.currentTime);
-    osc2.frequency.exponentialRampToValueAtTime(200, this.ctx.currentTime + 0.45);
-    
-    gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.45);
-    
-    osc.connect(gain);
-    osc2.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start();
-    osc2.start();
-    osc.stop(this.ctx.currentTime + 0.45);
-    osc2.stop(this.ctx.currentTime + 0.45);
-  }
-
-  playDeath() {
-    if (!this.ctx || this.isMuted) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(900, this.ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(20, this.ctx.currentTime + 0.85);
-
-    const bufferSize = this.ctx.sampleRate * 0.8;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-    const noise = this.ctx.createBufferSource();
-    noise.buffer = buffer;
-
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(1200, this.ctx.currentTime);
-    filter.frequency.exponentialRampToValueAtTime(60, this.ctx.currentTime + 0.85);
-    
-    gain.gain.setValueAtTime(0.28, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.85);
-    
-    osc.connect(gain);
+    filter.frequency.setValueAtTime(filterFrom, this.ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(filterTo, this.ctx.currentTime + t);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + t);
     noise.connect(filter);
     filter.connect(gain);
     gain.connect(this.ctx.destination);
-    
-    osc.start();
     noise.start();
-    osc.stop(this.ctx.currentTime + 0.85);
-    noise.stop(this.ctx.currentTime + 0.85);
+  }
+
+  // --- SID-style 3-channel music loop (bass + arpeggio + lead blips) ---
+  startMusic() {
+    if (this.musicTimer) return;
+    // A-minor / F / C / G progression roots
+    const bassline = [110.0, 110.0, 87.31, 87.31, 130.81, 130.81, 98.0, 98.0];
+    const chords = [
+      [220.0, 261.63, 329.63],   // Am
+      [174.61, 220.0, 261.63],   // F
+      [261.63, 329.63, 392.0],   // C
+      [196.0, 246.94, 293.66]    // G
+    ];
+    this.musicTimer = setInterval(() => {
+      if (!this.ctx || this.musicMuted) return;
+      const s = this.musicStep++;
+      const bar = Math.floor(s / 8) % 8;
+      const chord = chords[Math.floor(bar / 2) % 4];
+
+      // Channel 1: bass (square)
+      if (s % 4 === 0) {
+        this._tone('square', bassline[bar], bassline[bar], 0.22, 0.045);
+      }
+      // Channel 2: fast SID arpeggio (the classic chord-trill)
+      const arpNote = chord[s % 3] * 2;
+      this._tone('triangle', arpNote, arpNote, 0.09, gameState === 'PLAYING' ? 0.035 : 0.05);
+      // Channel 3: sparse lead blips
+      if (s % 16 === 14) {
+        this._tone('sawtooth', chord[2] * 2, chord[2] * 4, 0.18, 0.03);
+      }
+    }, 110);
+  }
+
+  playFlap() {
+    this.tone('sawtooth', 140, 360, 0.12, 0.12);
+  }
+
+  playFlapLaunch() {
+    this.tone('sawtooth', 90, 220, 0.18, 0.15);
+    this.tone('triangle', 45, 110, 0.18, 0.12);
+  }
+
+  playJoust() {
+    this.tone('square', 200, 50, 0.25, 0.18);
+    this.tone('sine', 1800, 900, 0.12, 0.12);
+    this.noiseBurst(0.18, 0.12);
+  }
+
+  playShieldBreak() {
+    this.tone('sawtooth', 2000, 100, 0.45, 0.18);
+    this.tone('sine', 2400, 200, 0.45, 0.12);
+  }
+
+  playDeath() {
+    this.tone('square', 900, 20, 0.85, 0.2);
+    this.noiseBurst(0.8, 0.18, 1200, 60);
   }
 
   playHatch() {
-    if (!this.ctx || this.isMuted) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(650, this.ctx.currentTime);
-    osc.frequency.setValueAtTime(950, this.ctx.currentTime + 0.08);
-    osc.frequency.setValueAtTime(1400, this.ctx.currentTime + 0.16);
-    gain.gain.setValueAtTime(0.14, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.28);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.28);
+    this.tone('sine', 650, 650, 0.08, 0.14);
+    this.tone('sine', 950, 950, 0.08, 0.14, 0.08);
+    this.tone('sine', 1400, 1400, 0.12, 0.14, 0.16);
   }
 
   playGrab() {
-    if (!this.ctx || this.isMuted) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(120, this.ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(40, this.ctx.currentTime + 0.65);
-    gain.gain.setValueAtTime(0.06, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.65);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.65);
+    this.tone('triangle', 120, 40, 0.65, 0.06);
   }
 
   playCollect() {
-    if (!this.ctx || this.isMuted) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(1000, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(2000, this.ctx.currentTime + 0.18);
-    gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.18);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.18);
+    this.tone('triangle', 1000, 2000, 0.18, 0.15);
   }
 
   playWaveStart() {
-    if (!this.ctx || this.isMuted) return;
-    const notes = [329.63, 392.00, 523.25, 659.25];
-    notes.forEach((freq, idx) => {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.08);
-      gain.gain.setValueAtTime(0.08, this.ctx.currentTime + idx * 0.08);
-      gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.08 + 0.22);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start(this.ctx.currentTime + idx * 0.08);
-      osc.stop(this.ctx.currentTime + idx * 0.08 + 0.22);
-    });
+    [329.63, 392.0, 523.25, 659.25].forEach((f, i) => this.tone('sawtooth', f, f, 0.22, 0.08, i * 0.08));
   }
 
-  // --- 10 NEW EVENT SOUNDS ---
-
-  // Sound 1: Lava Bubble Pop
   playBubblePop() {
-    if (!this.ctx || this.isMuted) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(180, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(450, this.ctx.currentTime + 0.04);
-    gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.04);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.04);
+    this.tone('sine', 180, 450, 0.04, 0.05);
   }
 
-  // Sound 2: Pterodactyl Warning Screech
   playPteroScreech() {
-    if (!this.ctx || this.isMuted) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(1600, this.ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(1100, this.ctx.currentTime + 0.45);
-    gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.45);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.45);
+    this.tone('sawtooth', 1600, 1100, 0.45, 0.12);
   }
 
-  // Sound 3: Pterodactyl Slay Chime Fanfare
   playPteroSlay() {
-    if (!this.ctx || this.isMuted) return;
-    const notes = [600, 800, 1000, 1200, 1600];
-    notes.forEach((freq, idx) => {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.05);
-      gain.gain.setValueAtTime(0.12, this.ctx.currentTime + idx * 0.05);
-      gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.05 + 0.15);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start(this.ctx.currentTime + idx * 0.05);
-      osc.stop(this.ctx.currentTime + idx * 0.05 + 0.15);
-    });
+    [600, 800, 1000, 1200, 1600].forEach((f, i) => this.tone('sine', f, f, 0.15, 0.12, i * 0.05));
   }
 
-  // Sound 4: Egg Roll Chirp
   playEggRoll() {
-    if (!this.ctx || this.isMuted) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(80, this.ctx.currentTime);
-    gain.gain.setValueAtTime(0.02, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.02);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.02);
+    this.tone('triangle', 80, 80, 0.02, 0.02);
   }
 
-  // Sound 5: Shield Deflect Ping
   playShieldDeflect() {
-    if (!this.ctx || this.isMuted) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(1700, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(650, this.ctx.currentTime + 0.18);
-    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.18);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.18);
+    this.tone('sine', 1700, 650, 0.18, 0.2);
   }
 
-  // Sound 6: Speed Boost Powerup Chord
   playSpeedBoost() {
-    if (!this.ctx || this.isMuted) return;
-    const notes = [523.25, 659.25, 783.99, 1046.50];
-    notes.forEach((freq, idx) => {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.06);
-      gain.gain.setValueAtTime(0.12, this.ctx.currentTime + idx * 0.06);
-      gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.06 + 0.18);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start(this.ctx.currentTime + idx * 0.06);
-      osc.stop(this.ctx.currentTime + idx * 0.06 + 0.18);
-    });
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => this.tone('triangle', f, f, 0.18, 0.12, i * 0.06));
   }
 
-  // Sound 8: Wave Victory Jingle
   playVictory() {
-    if (!this.ctx || this.isMuted) return;
-    const notes = [261.63, 329.63, 392.00, 523.25, 392.00, 523.25, 659.25];
-    notes.forEach((freq, idx) => {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.12);
-      gain.gain.setValueAtTime(0.08, this.ctx.currentTime + idx * 0.12);
-      gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.12 + 0.2);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start(this.ctx.currentTime + idx * 0.12);
-      osc.stop(this.ctx.currentTime + idx * 0.12 + 0.2);
-    });
+    [261.63, 329.63, 392.0, 523.25, 392.0, 523.25, 659.25].forEach((f, i) => this.tone('sawtooth', f, f, 0.2, 0.08, i * 0.12));
   }
 
-  // Sound 9: Low Life Dual Pulse Warning
   playLowLife() {
-    if (!this.ctx || this.isMuted) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(160, this.ctx.currentTime);
-    osc.frequency.setValueAtTime(130, this.ctx.currentTime + 0.12);
-    gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.24);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.24);
+    this.tone('square', 160, 160, 0.12, 0.15);
+    this.tone('square', 130, 130, 0.12, 0.15, 0.12);
   }
 
-  // Sound 10: Leaderboard Menu Fanfare arpeggios
   playLeaderboard() {
-    if (!this.ctx || this.isMuted) return;
-    const notes = [440.00, 554.37, 659.25, 880.00, 659.25, 554.37];
-    notes.forEach((freq, idx) => {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.08);
-      gain.gain.setValueAtTime(0.05, this.ctx.currentTime + idx * 0.08);
-      gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.08 + 0.14);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start(this.ctx.currentTime + idx * 0.08);
-      osc.stop(this.ctx.currentTime + idx * 0.08 + 0.14);
-    });
+    [440.0, 554.37, 659.25, 880.0, 659.25, 554.37].forEach((f, i) => this.tone('triangle', f, f, 0.14, 0.05, i * 0.08));
+  }
+
+  // Glitch transition: detuned squares + filtered static
+  playGlitch() {
+    this.noiseBurst(0.4, 0.14, 6000, 200);
+    for (let i = 0; i < 5; i++) {
+      this.tone('square', 200 + Math.random() * 1800, 50 + Math.random() * 400, 0.06, 0.06, i * 0.05);
+    }
+  }
+
+  playPanicFlap() {
+    this.tone('sawtooth', 400, 700, 0.07, 0.04);
   }
 }
 
@@ -395,6 +230,7 @@ const ctx = canvas.getContext('2d');
 const border = document.getElementById('screenBorder');
 
 let screenShakeIntensity = 0;
+let frame = 0; // global demo clock
 
 const platforms = [
   { x: 0, y: 388, w: 180, h: 12 },
@@ -407,7 +243,6 @@ const platforms = [
   { x: 260, y: 100, w: 120, h: 12 }
 ];
 
-// Relocated safe spawn points (prevent overlap on start)
 const spawnPoints = [
   { x: 80, y: 80 },
   { x: 540, y: 80 },
@@ -423,12 +258,30 @@ window.addEventListener('keydown', (e) => {
     if (gameState === 'PLAYING') triggerFlap();
   }
   if (e.code === 'KeyM') {
-    synth.isMuted = !synth.isMuted;
-    document.getElementById('musicStatus').innerText = synth.isMuted ? 'OFF' : 'ON';
+    toggleSound();
   }
 });
 window.addEventListener('keyup', (e) => {
   keys[e.code] = false;
+});
+
+// --- Sound FX toggle (M key) ---
+function toggleSound() {
+  synth.isMuted = !synth.isMuted;
+  document.getElementById('musicStatus').innerText = synth.isMuted ? 'OFF' : 'ON';
+}
+
+// --- Music toggle (button) — music only, sound effects stay on ---
+function toggleMusic() {
+  synth.musicMuted = !synth.musicMuted;
+  document.getElementById('musicToggleState').innerText = synth.musicMuted ? 'OFF' : 'ON';
+  document.getElementById('musicToggleBtn').classList.toggle('muted', synth.musicMuted);
+}
+
+document.getElementById('musicToggleBtn').addEventListener('click', (e) => {
+  synth.init(); // allow enabling audio from the menu before the game starts
+  toggleMusic();
+  e.currentTarget.blur(); // keep Space flapping instead of re-clicking the button
 });
 
 // --- Mobile buttons state ---
@@ -445,6 +298,7 @@ document.getElementById('btnFlap').addEventListener('touchstart', (e) => {
 // --- Entities & State Variables ---
 let gameState = 'MENU';
 let score = 0;
+let scorePop = 0; // HUD typography pop animation
 let highScore = parseInt(localStorage.getItem('joust_high') || '0');
 let lives = 3;
 let wave = 1;
@@ -460,6 +314,35 @@ let pterodactyl = null;
 let floatingTexts = [];
 let lavaRipples = [];
 
+// --- Glitch transition system (trash retro color flicker) ---
+let transition = null; // { t, dur, cb, next, fired }
+function startTransition(cb, next) {
+  transition = { t: 0, dur: 46, cb, next, fired: false };
+  gameState = 'TRANSITION';
+  synth.playGlitch();
+  triggerBorderFlash('flash-white');
+}
+
+// --- Parallax starfield (3 depth layers) ---
+const stars = [];
+for (let layer = 0; layer < 3; layer++) {
+  for (let i = 0; i < 30; i++) {
+    stars.push({
+      x: Math.random() * 640,
+      y: Math.random() * 370,
+      layer,
+      speed: 0.15 + layer * 0.3,
+      twinkle: Math.random() * 100
+    });
+  }
+}
+
+// --- Vector balls (menu demo objects) ---
+const vectorBalls = [];
+for (let i = 0; i < 6; i++) {
+  vectorBalls.push({ phase: (i / 6) * Math.PI * 2 });
+}
+
 // Populate lava heat ripples
 for (let i = 0; i < 6; i++) {
   lavaRipples.push({
@@ -470,30 +353,65 @@ for (let i = 0; i < 6; i++) {
   });
 }
 
+// --- Scroller texts (classic demo greetings) ---
+const SCROLL_TEXT = '*** C64 JOUST DEMOSCENE EDITION *** GREETINGS FLY OUT TO ALL OSTRICH RIDERS ... FLAP TO SURVIVE THE LAVA PIT ... CODE+GFX+SID BY THE JOUST CREW ... PRESS LOAD TO RIDE ... RASTERBARS! PLASMA! VECTORBALLS! ... KEEP THE SCENE ALIVE ...     ';
+let scrollX = 660;
+
 class FloatingText {
-  constructor(x, y, text, color) {
+  constructor(x, y, text, color, opts = {}) {
     this.x = x;
     this.y = y;
     this.text = text;
     this.color = color;
     this.vy = -1.0;
     this.alpha = 1.0;
+    this.scale = 1.8;          // typography pop-in
+    this.rainbow = !!opts.rainbow;
+    this.wave = !!opts.wave;
+    this.t = 0;
   }
 
   update() {
     this.y += this.vy;
-    this.alpha -= 0.025;
+    this.alpha -= 0.02;
+    this.scale += (1.0 - this.scale) * 0.2;
+    this.t++;
   }
 
   draw() {
     if (this.alpha <= 0) return;
     ctx.save();
-    ctx.globalAlpha = this.alpha;
+    ctx.globalAlpha = Math.max(this.alpha, 0);
     ctx.font = '8px "Press Start 2P"';
-    ctx.fillStyle = this.color;
-    ctx.fillText(this.text, this.x, this.y);
+    if (this.wave || this.rainbow) {
+      // per-letter wavy rainbow typography
+      let cx = this.x;
+      for (let i = 0; i < this.text.length; i++) {
+        const dy = this.wave ? Math.sin(this.t * 0.25 + i * 0.6) * 3 : 0;
+        ctx.fillStyle = this.rainbow ? rainbow(this.t * 0.3 + i) : this.color;
+        ctx.save();
+        ctx.translate(cx, this.y + dy);
+        ctx.scale(this.scale, this.scale);
+        ctx.fillText(this.text[i], 0, 0);
+        ctx.restore();
+        cx += 9 * this.scale;
+      }
+    } else {
+      ctx.fillStyle = this.color;
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.scale(this.scale, this.scale);
+      ctx.fillText(this.text, 0, 0);
+      ctx.restore();
+    }
     ctx.restore();
   }
+}
+
+function addScore(n, x, y, color, opts) {
+  score += n;
+  scorePop = 12;
+  floatingTexts.push(new FloatingText(x, y, '+' + n, color, opts));
 }
 
 let lavaHand = {
@@ -510,7 +428,7 @@ class Particle {
   constructor(x, y, color, type = 'spark') {
     this.x = x;
     this.y = y;
-    this.type = type; // spark, feather, bubble
+    this.type = type; // spark, feather, bubble, trail, ember, firework, ring
     this.vx = (Math.random() - 0.5) * (type === 'feather' ? 2 : 6);
     this.vy = (Math.random() - 0.5) * (type === 'feather' ? 1.2 : 6) - (type === 'bubble' ? 1.5 : 0);
     this.size = type === 'feather' ? Math.random() * 4 + 3 : Math.random() * 3 + 2;
@@ -518,6 +436,27 @@ class Particle {
     this.life = 1.0;
     this.decay = Math.random() * 0.03 + 0.015;
     this.angle = Math.random() * Math.PI * 2;
+
+    if (type === 'trail') {
+      this.vx = 0; this.vy = 0;
+      this.decay = 0.07;
+      this.size = Math.random() * 3 + 2;
+    } else if (type === 'ember') {
+      this.vx = (Math.random() - 0.5) * 0.8;
+      this.vy = -(Math.random() * 0.8 + 0.4);
+      this.decay = Math.random() * 0.01 + 0.006;
+      this.size = Math.random() * 2 + 1;
+    } else if (type === 'firework') {
+      const a = Math.random() * Math.PI * 2;
+      const sp = Math.random() * 4 + 1.5;
+      this.vx = Math.cos(a) * sp;
+      this.vy = Math.sin(a) * sp;
+      this.decay = Math.random() * 0.015 + 0.01;
+    } else if (type === 'ring') {
+      this.vx = 0; this.vy = 0;
+      this.size = 2;
+      this.decay = 0.04;
+    }
   }
 
   update() {
@@ -530,36 +469,54 @@ class Particle {
     } else if (this.type === 'bubble') {
       this.vy -= 0.03;
       this.vx *= 0.94;
-    } else {
+    } else if (this.type === 'ember') {
+      this.vx += Math.sin(this.angle + this.y * 0.05) * 0.03;
+    } else if (this.type === 'firework') {
+      this.vy += 0.08;
+      this.vx *= 0.98;
+    } else if (this.type === 'ring') {
+      this.size += 2.2;
+    } else if (this.type !== 'trail') {
       this.vy += 0.16;
     }
     this.life -= this.decay;
   }
 
   draw() {
-    ctx.fillStyle = this.color;
+    if (this.type === 'ring') {
+      ctx.save();
+      ctx.globalAlpha = Math.max(this.life, 0);
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
+    ctx.save();
+    if (this.type === 'trail' || this.type === 'ember') ctx.globalAlpha = Math.max(this.life, 0) * 0.7;
+    ctx.fillStyle = this.type === 'firework' ? rainbow(frame * 0.5 + this.angle * 3) : this.color;
     if (this.type === 'feather') {
       ctx.fillRect(Math.floor(this.x), Math.floor(this.y), Math.floor(this.size), Math.floor(this.size / 2));
     } else {
       ctx.fillRect(Math.floor(this.x), Math.floor(this.y), Math.floor(this.size), Math.floor(this.size));
     }
+    ctx.restore();
   }
 }
 
+function explosionBurst(x, y, color, count = 16) {
+  for (let i = 0; i < count; i++) particles.push(new Particle(x, y, color, 'firework'));
+  particles.push(new Particle(x, y, C64.white, 'ring'));
+  particles.push(new Particle(x, y, color, 'ring'));
+}
+
 // --- Split Wrap Rendering Utility ---
-// Draws the entity wrapped around the edges seamlessly to avoid graphic pop-out issues.
 function drawWrappedEntity(x, width, drawCallback) {
-  // Primary Draw
   drawCallback(x);
-  
-  // Wrap-left duplicate
-  if (x < 0) {
-    drawCallback(x + canvas.width);
-  }
-  // Wrap-right duplicate
-  if (x + width > canvas.width) {
-    drawCallback(x - canvas.width);
-  }
+  if (x < 0) drawCallback(x + canvas.width);
+  if (x + width > canvas.width) drawCallback(x - canvas.width);
 }
 
 // --- Powerups ---
@@ -575,13 +532,19 @@ class Powerup {
 
   update() {
     this.pulse += 0.1;
+    // sparkle aura
+    if (Math.random() < 0.15) {
+      const p = new Particle(this.x + Math.random() * 18, this.y + Math.random() * 18,
+        this.type === 'shield' ? C64.cyan : C64.yellow, 'trail');
+      particles.push(p);
+    }
   }
 
   draw() {
     const pulseOffset = Math.sin(this.pulse) * 3;
     drawWrappedEntity(this.x, this.width, (dx) => {
       if (this.type === 'shield') {
-        ctx.strokeStyle = C64.cyan;
+        ctx.strokeStyle = rainbow(frame * 0.2);
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.arc(dx + 9, this.y + 9, 8 + pulseOffset, 0, Math.PI * 2);
@@ -589,9 +552,9 @@ class Powerup {
         ctx.fillStyle = C64.lightBlue;
         ctx.fillRect(dx + 6, this.y + 6, 6, 6);
       } else if (this.type === 'gold_egg') {
-        ctx.fillStyle = C64.yellow;
+        ctx.fillStyle = frame % 20 < 10 ? C64.yellow : C64.white; // color flash cycle
         ctx.beginPath();
-        ctx.ellipse(dx + 9, this.y + 9, 6 + pulseOffset/2, 8 + pulseOffset/2, 0, 0, Math.PI * 2);
+        ctx.ellipse(dx + 9, this.y + 9, 6 + pulseOffset / 2, 8 + pulseOffset / 2, 0, 0, Math.PI * 2);
         ctx.fill();
       }
     });
@@ -619,15 +582,13 @@ class Player {
     this.isGrabbed = false;
     this.hasShield = false;
     this.speedBoostTimer = 0;
-    
-    // Squash & Stretch animations
     this.squashX = 1.0;
     this.squashY = 1.0;
     this.wasOnGround = false;
   }
 
   update() {
-    if (this.isGrabbed && lavaHand.active && lavaHand.target === this) return; 
+    if (this.isGrabbed && lavaHand.active && lavaHand.target === this) return;
 
     let moveLeft = keys['ArrowLeft'] || keys['KeyA'] || mobileControls.left;
     let moveRight = keys['ArrowRight'] || keys['KeyD'] || mobileControls.right;
@@ -638,6 +599,8 @@ class Player {
       this.speedBoostTimer--;
       acc = 0.4;
       maxSpeed = 6.0;
+      // speed boost rainbow exhaust
+      particles.push(new Particle(this.x + this.width / 2 - this.facing * 12, this.y + 18, rainbow(frame), 'trail'));
     }
 
     if (moveLeft) {
@@ -661,11 +624,9 @@ class Player {
     this.x += this.vx;
     this.y += this.vy;
 
-    // Edge wrapping
     if (this.x < -this.width) this.x = canvas.width;
     if (this.x > canvas.width) this.x = -this.width;
 
-    // Platform Collisions
     let onGround = false;
     platforms.forEach(plat => {
       if (this.x + this.width > plat.x && this.x < plat.x + plat.w) {
@@ -682,19 +643,25 @@ class Player {
 
     if (onGround) {
       if (!this.wasOnGround) {
-        // Land impact: squash ostrich vertical scale
         this.squashX = 1.3;
         this.squashY = 0.7;
+        // landing dust
+        for (let i = 0; i < 4; i++) {
+          particles.push(new Particle(this.x + Math.random() * this.width, this.y + this.height, C64.grey, 'trail'));
+        }
       }
       this.vy = 0;
-      this.animFrame = Math.floor(this.walkCycle) % 3; 
+      this.animFrame = Math.floor(this.walkCycle) % 3;
     } else {
-      this.animFrame = Math.floor(this.flapCycle) % 2 + 3; 
+      this.animFrame = Math.floor(this.flapCycle) % 2 + 3;
+      // sprite ghosting trail while airborne (multiplexer afterimage)
+      if (frame % 3 === 0 && Math.abs(this.vx) + Math.abs(this.vy) > 1.5) {
+        particles.push(new Particle(this.x + this.width / 2, this.y + this.height / 2, C64.lightBlue, 'trail'));
+      }
     }
-    
+
     this.wasOnGround = onGround;
 
-    // Smooth return to base shape scale
     this.squashX += (1.0 - this.squashX) * 0.16;
     this.squashY += (1.0 - this.squashY) * 0.16;
 
@@ -706,25 +673,19 @@ class Player {
 
     drawWrappedEntity(this.x, this.width, (dx) => {
       ctx.save();
-      // Translate to center-bottom (feet) to squash and skew from ground pivot
       ctx.translate(dx + this.width / 2, this.y + this.height);
       ctx.scale(this.facing * this.squashX, this.squashY);
 
-      // Lean tilt forward/backward based on movement speed
       const lean = this.vx * 0.035;
       ctx.rotate(lean);
-      
-      // Move offset back up to draw normally
       ctx.translate(0, -this.height);
 
-      // Ostrich Mount body
       ctx.fillStyle = C64.lightBlue;
-      ctx.fillRect(-10, 12, 20, 10); // Body coords offset modified to fit bottom pivot
+      ctx.fillRect(-10, 12, 20, 10);
 
-      // Procedural Leg Running Animation
       ctx.fillStyle = C64.purple;
       const legFrame = this.animFrame % 3;
-      if (this.vy === 0) { // On Ground
+      if (this.vy === 0) {
         if (legFrame === 0) {
           ctx.fillRect(-6, 22, 3, 8);
           ctx.fillRect(3, 22, 3, 8);
@@ -737,25 +698,22 @@ class Player {
           ctx.fillRect(-4, 22, 3, 8);
           ctx.fillRect(6, 22, 3, 8);
         }
-      } else { // Flying
+      } else {
         ctx.fillRect(-7, 22, 3, 6);
         ctx.fillRect(2, 22, 3, 6);
       }
 
-      // Head & Neck
       ctx.fillStyle = C64.lightBlue;
       ctx.fillRect(8, 4, 4, 10);
       ctx.fillRect(10, 2, 6, 4);
 
-      // Lance (Glows if speed boosted)
-      ctx.strokeStyle = this.speedBoostTimer > 0 ? C64.white : C64.yellow;
+      ctx.strokeStyle = this.speedBoostTimer > 0 ? rainbow(frame) : C64.yellow;
       ctx.lineWidth = this.speedBoostTimer > 0 ? 3 : 2;
       ctx.beginPath();
       ctx.moveTo(0, 8);
       ctx.lineTo(24, 6);
       ctx.stroke();
 
-      // Rider (Knight)
       ctx.fillStyle = C64.cyan;
       ctx.fillRect(-6, 2, 12, 10);
       ctx.fillStyle = C64.white;
@@ -763,7 +721,6 @@ class Player {
       ctx.fillStyle = C64.red;
       ctx.fillRect(this.facing === 1 ? 2 : -4, 0, 2, 2);
 
-      // Wing flaps
       ctx.fillStyle = C64.purple;
       let wingFrame = Math.floor(this.flapCycle) % 3;
       if (wingFrame === 0) ctx.fillRect(-8, 14, 12, 4);
@@ -772,10 +729,9 @@ class Player {
 
       ctx.restore();
 
-      // Shield Bubble
       if (this.hasShield) {
         ctx.save();
-        ctx.strokeStyle = C64.cyan;
+        ctx.strokeStyle = rainbow(frame * 0.5); // color-cycled shield
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(dx + this.width / 2, this.y + this.height / 2, 22 + Math.sin(Date.now() / 80) * 2, 0, Math.PI * 2);
@@ -795,10 +751,12 @@ function triggerFlap() {
   }
   player.vy = -3.4;
   player.flapCycle += 1.0;
-  
+
   for (let i = 0; i < 2; i++) {
     particles.push(new Particle(player.x + player.width / 2, player.y + player.height, C64.lightGrey, 'feather'));
   }
+  // downdraft puff
+  particles.push(new Particle(player.x + player.width / 2, player.y + player.height + 4, C64.white, 'trail'));
 }
 
 // --- Enemy Setup ---
@@ -815,20 +773,64 @@ class Enemy {
     this.flapTimer = Math.random() * 40;
     this.walkCycle = 0;
     this.isGrabbed = false;
-    
-    // Squash & Stretch
+    this.panicCooldown = 0;
     this.squashX = 1.0;
     this.squashY = 1.0;
     this.wasOnGround = false;
   }
 
+  // Lava-avoidance brain: enemies actively dodge the lava + troll hand
+  // instead of drifting to their doom at the bottom edge.
+  avoidLava() {
+    const DANGER_Y = 290;       // start worrying
+    const PANIC_Y = 330;        // full panic — climb NOW
+    const bottom = this.y + this.height;
+    if (this.panicCooldown > 0) this.panicCooldown--;
+
+    if (bottom > PANIC_Y) {
+      // Emergency: hard repeated flaps until clear of the pit
+      if (this.vy > -2.2 && this.panicCooldown <= 0) {
+        this.vy = -3.4;
+        this.panicCooldown = 6;
+        synth.playPanicFlap();
+        particles.push(new Particle(this.x + this.width / 2, this.y + this.height, C64.lightGrey, 'feather'));
+      }
+      // Steer toward the nearest platform that's safely above the lava
+      let best = null, bestDist = 1e9;
+      platforms.forEach(plat => {
+        if (plat.y >= 360) return; // ignore the lava-level ledges as refuge
+        const cx = plat.x + plat.w / 2;
+        const d = Math.abs(cx - (this.x + this.width / 2));
+        if (d < bestDist) { bestDist = d; best = plat; }
+      });
+      if (best) {
+        const cx = best.x + best.w / 2;
+        this.vx += (this.x + this.width / 2 < cx ? 0.18 : -0.18);
+      }
+      // Extra dodge: flee the lava hand if it's rising nearby
+      if (lavaHand.active && Math.abs(lavaHand.x - this.x) < 80) {
+        this.vx += (this.x < lavaHand.x ? -0.3 : 0.3);
+      }
+      return true;
+    }
+    if (bottom > DANGER_Y && this.vy > 0.5 && this.panicCooldown <= 0) {
+      // Pre-emptive altitude correction
+      this.vy = -2.9;
+      this.panicCooldown = 10;
+      return true;
+    }
+    return false;
+  }
+
   update() {
     if (this.isGrabbed && lavaHand.active && lavaHand.target === this) return;
 
+    const panicking = this.avoidLava();
+
     this.flapTimer--;
-    if (this.flapTimer <= 0) {
+    if (this.flapTimer <= 0 && !panicking) {
       let flapChance = 0.05;
-      
+
       if (this.type === 'Hunter') {
         if (player && this.y + 12 > player.y) flapChance = 0.3;
       } else if (this.type === 'ShadowLord') {
@@ -837,8 +839,6 @@ class Enemy {
       } else {
         if (this.vy > 1.0) flapChance = 0.18;
       }
-
-      if (this.y > 330) flapChance = 0.75; // lava hand dodge
 
       if (Math.random() < flapChance) {
         this.vy = -2.9;
@@ -884,6 +884,11 @@ class Enemy {
     }
     this.wasOnGround = onGround;
 
+    // ShadowLord leaves a dark afterimage trail
+    if (this.type === 'ShadowLord' && frame % 4 === 0) {
+      particles.push(new Particle(this.x + this.width / 2, this.y + this.height / 2, C64.darkGrey, 'trail'));
+    }
+
     this.squashX += (1.0 - this.squashX) * 0.16;
     this.squashY += (1.0 - this.squashY) * 0.16;
   }
@@ -896,7 +901,6 @@ class Enemy {
 
       const lean = this.vx * 0.035;
       ctx.rotate(lean);
-
       ctx.translate(0, -this.height);
 
       let buzzardColor = C64.red;
@@ -909,17 +913,14 @@ class Enemy {
         knightColor = C64.lightGrey;
       }
 
-      // Rider Knight
       ctx.fillStyle = knightColor;
       ctx.fillRect(-6, 2, 12, 10);
       ctx.fillStyle = C64.black;
       ctx.fillRect(-4, -2, 8, 5);
 
-      // Buzzard
       ctx.fillStyle = buzzardColor;
       ctx.fillRect(-10, 12, 20, 10);
 
-      // Leg Walk animation
       ctx.fillStyle = C64.brown;
       const legFrame = Math.floor(this.walkCycle) % 3;
       if (this.vy === 0) {
@@ -987,12 +988,14 @@ class Egg {
     });
 
     this.hatchTimer--;
+    // hatch warning shimmer
+    if (this.hatchTimer < 100 && frame % 6 === 0) {
+      particles.push(new Particle(this.x + 8, this.y + 8, C64.orange, 'trail'));
+    }
     if (this.hatchTimer <= 0) {
       enemies.push(new Enemy(this.x, this.y - 12, this.tier));
       synth.playHatch();
-      for (let i = 0; i < 8; i++) {
-        particles.push(new Particle(this.x + 8, this.y + 8, C64.orange));
-      }
+      explosionBurst(this.x + 8, this.y + 8, C64.orange, 10);
       return false;
     }
     return true;
@@ -1000,7 +1003,9 @@ class Egg {
 
   draw() {
     drawWrappedEntity(this.x, this.width, (dx) => {
-      ctx.fillStyle = C64.yellow;
+      // egg flashes faster as hatch approaches (color cycle warning)
+      const urgent = this.hatchTimer < 100 && Math.floor(frame / 4) % 2 === 0;
+      ctx.fillStyle = urgent ? C64.white : C64.yellow;
       ctx.beginPath();
       ctx.ellipse(dx + 8, this.y + 8, 6, 8, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1030,6 +1035,10 @@ class Pterodactyl {
     this.x += this.vx;
     if (player) {
       this.y += (player.y - this.y) * 0.035;
+    }
+    // menacing red trail
+    if (frame % 2 === 0) {
+      particles.push(new Particle(this.x + this.width / 2 - this.facing * 14, this.y + this.height / 2, C64.red, 'trail'));
     }
 
     if ((this.vx > 0 && this.x > canvas.width + 50) || (this.vx < 0 && this.x < -100)) {
@@ -1104,7 +1113,7 @@ function spawnWave() {
   if (Math.random() < 0.5) {
     const pt = platforms[Math.floor(Math.random() * (platforms.length - 2) + 2)];
     const type = Math.random() < 0.4 ? 'shield' : 'gold_egg';
-    powerups.push(new Powerup(pt.x + pt.w/2 - 9, pt.y - 18, type));
+    powerups.push(new Powerup(pt.x + pt.w / 2 - 9, pt.y - 18, type));
   }
 
   if (player) {
@@ -1121,8 +1130,8 @@ function checkJoustCollisions() {
   if (pterodactyl && player.invulnerable === 0) {
     if (player.x + player.width > pterodactyl.x && player.x < pterodactyl.x + pterodactyl.width &&
         player.y + player.height > pterodactyl.y && player.y < pterodactyl.y + pterodactyl.height) {
-      
-      const hitCenter = Math.abs((player.y + player.height/2) - (pterodactyl.y + pterodactyl.height/2));
+
+      const hitCenter = Math.abs((player.y + player.height / 2) - (pterodactyl.y + pterodactyl.height / 2));
       const hitFront = player.facing === 1 ? (player.x + player.width >= pterodactyl.x) : (player.x <= pterodactyl.x + pterodactyl.width);
 
       if (hitCenter < 8 && hitFront) {
@@ -1130,12 +1139,8 @@ function checkJoustCollisions() {
         synth.playPteroSlay();
         triggerScreenShake(12);
         triggerBorderFlash('flash-green');
-        score += 1000;
-        floatingTexts.push(new FloatingText(pterodactyl.x, pterodactyl.y, "+1000", C64.yellow));
-        
-        for (let i = 0; i < 20; i++) {
-          particles.push(new Particle(pterodactyl.x + 15, pterodactyl.y + 9, C64.orange));
-        }
+        addScore(1000, pterodactyl.x, pterodactyl.y, C64.yellow, { rainbow: true, wave: true });
+        explosionBurst(pterodactyl.x + 15, pterodactyl.y + 9, C64.orange, 28);
         pterodactyl = null;
       } else {
         handlePlayerDeath();
@@ -1149,7 +1154,7 @@ function checkJoustCollisions() {
 
     if (player.x + player.width > enemy.x && player.x < enemy.x + enemy.width &&
         player.y + player.height > enemy.y && player.y < enemy.y + enemy.height) {
-      
+
       const pCenterY = player.y + player.height / 2;
       const eCenterY = enemy.y + enemy.height / 2;
 
@@ -1161,13 +1166,12 @@ function checkJoustCollisions() {
         triggerBorderFlash('flash-green');
         eggs.push(new Egg(enemy.x, enemy.y, enemy.type));
         enemies.splice(idx, 1);
-        score += 150;
-        floatingTexts.push(new FloatingText(enemy.x, enemy.y, "+150", C64.green));
-
-        for (let i = 0; i < 8; i++) {
-          particles.push(new Particle(enemy.x + 12, enemy.y + 16, C64.lightBlue));
+        addScore(150, enemy.x, enemy.y, C64.green);
+        explosionBurst(enemy.x + 12, enemy.y + 16, C64.lightBlue, 12);
+        for (let i = 0; i < 6; i++) {
+          particles.push(new Particle(enemy.x + 12, enemy.y + 16, C64.lightGrey, 'feather'));
         }
-      } 
+      }
       else if (pCenterY > eCenterY + 4) {
         if (player.hasShield) {
           player.hasShield = false;
@@ -1176,14 +1180,12 @@ function checkJoustCollisions() {
           triggerScreenShake(8);
           player.vx = -player.vx * 1.5;
           player.vy = -2.5;
-          floatingTexts.push(new FloatingText(player.x, player.y, "SHIELD BREAK", C64.lightRed));
-          for (let i = 0; i < 15; i++) {
-            particles.push(new Particle(player.x + 12, player.y + 16, C64.cyan, 'spark'));
-          }
+          floatingTexts.push(new FloatingText(player.x, player.y, "SHIELD BREAK", C64.lightRed, { wave: true }));
+          explosionBurst(player.x + 12, player.y + 16, C64.cyan, 15);
         } else {
           handlePlayerDeath();
         }
-      } 
+      }
       else {
         synth.playJoust();
         const pDir = player.x < enemy.x ? -1 : 1;
@@ -1192,8 +1194,9 @@ function checkJoustCollisions() {
         player.vy = -1.8;
         enemy.vy = -1.8;
         for (let i = 0; i < 5; i++) {
-          particles.push(new Particle((player.x + enemy.x)/2, (player.y + enemy.y)/2, C64.white));
+          particles.push(new Particle((player.x + enemy.x) / 2, (player.y + enemy.y) / 2, C64.white));
         }
+        particles.push(new Particle((player.x + enemy.x) / 2, (player.y + enemy.y) / 2, C64.white, 'ring'));
       }
     }
   });
@@ -1203,15 +1206,11 @@ function checkJoustCollisions() {
     let egg = eggs[i];
     if (player.x + player.width > egg.x && player.x < egg.x + egg.width &&
         player.y + player.height > egg.y && player.y < egg.y + egg.height) {
-      
+
       synth.playCollect();
       eggs.splice(i, 1);
-      score += 250;
-      floatingTexts.push(new FloatingText(egg.x, egg.y, "+250", C64.yellow));
-      
-      for (let j = 0; j < 6; j++) {
-        particles.push(new Particle(egg.x + 8, egg.y + 8, C64.yellow));
-      }
+      addScore(250, egg.x, egg.y, C64.yellow);
+      explosionBurst(egg.x + 8, egg.y + 8, C64.yellow, 8);
     }
   }
 
@@ -1220,23 +1219,20 @@ function checkJoustCollisions() {
     let pw = powerups[i];
     if (player.x + player.width > pw.x && player.x < pw.x + pw.width &&
         player.y + player.height > pw.y && player.y < pw.y + pw.height) {
-      
+
       synth.playCollect();
       powerups.splice(i, 1);
-      
+
       if (pw.type === 'shield') {
         player.hasShield = true;
-        floatingTexts.push(new FloatingText(pw.x, pw.y, "SHIELD", C64.cyan));
+        floatingTexts.push(new FloatingText(pw.x, pw.y, "SHIELD", C64.cyan, { rainbow: true }));
       } else if (pw.type === 'gold_egg') {
-        score += 500;
         player.speedBoostTimer = 300;
         synth.playSpeedBoost();
-        floatingTexts.push(new FloatingText(pw.x, pw.y, "+500 SPEED", C64.yellow));
+        addScore(500, pw.x, pw.y, C64.yellow, { rainbow: true, wave: true });
       }
 
-      for (let j = 0; j < 12; j++) {
-        particles.push(new Particle(pw.x + 9, pw.y + 9, C64.cyan));
-      }
+      explosionBurst(pw.x + 9, pw.y + 9, C64.cyan, 16);
     }
   }
 }
@@ -1245,7 +1241,8 @@ function handlePlayerDeath() {
   synth.playDeath();
   triggerScreenShake(15);
   triggerBorderFlash('flash-red');
-  
+
+  explosionBurst(player.x + 12, player.y + 16, C64.lightRed, 24);
   for (let i = 0; i < 18; i++) {
     particles.push(new Particle(player.x + 12, player.y + 16, C64.lightRed, 'feather'));
   }
@@ -1254,11 +1251,11 @@ function handlePlayerDeath() {
   if (lives === 1) {
     synth.playLowLife();
   }
-  
+
   if (lives <= 0) {
     gameState = 'GAME_OVER';
     document.getElementById('finalScore').innerText = `SCORE: ${score}`;
-    
+
     const leaderboard = JSON.parse(localStorage.getItem('joust_leader') || '[]');
     const qualifies = leaderboard.length < 5 || score > leaderboard[leaderboard.length - 1].score;
 
@@ -1282,10 +1279,14 @@ function handlePlayerDeath() {
 // --- Lava & Hand Mechanics ---
 function updateLavaTroll() {
   const lavaLevel = 380;
-  
+
   if (Math.random() < 0.15) {
     particles.push(new Particle(Math.random() * canvas.width, 385, C64.orange, 'bubble'));
     synth.playBubblePop();
+  }
+  // constant rising embers from the lava
+  if (Math.random() < 0.3) {
+    particles.push(new Particle(Math.random() * canvas.width, 384, Math.random() < 0.5 ? C64.orange : C64.yellow, 'ember'));
   }
 
   if (player && !player.isGrabbed && player.invulnerable === 0 && player.y + player.height > lavaLevel) {
@@ -1304,19 +1305,14 @@ function updateLavaTroll() {
 
   for (let i = eggs.length - 1; i >= 0; i--) {
     if (eggs[i].y + eggs[i].height > lavaLevel) {
-      for (let j = 0; j < 5; j++) {
-        particles.push(new Particle(eggs[i].x + 8, eggs[i].y + 8, C64.orange));
-      }
+      explosionBurst(eggs[i].x + 8, eggs[i].y + 8, C64.orange, 6);
       eggs.splice(i, 1);
     }
   }
 
-  // Safety fallback: Melt enemies that sink too deep into lava to prevent softlocks
   for (let i = enemies.length - 1; i >= 0; i--) {
     if (enemies[i].y > 390) {
-      for (let j = 0; j < 8; j++) {
-        particles.push(new Particle(enemies[i].x + 12, 385, C64.orange, 'spark'));
-      }
+      explosionBurst(enemies[i].x + 12, 385, C64.orange, 10);
       if (lavaHand.target === enemies[i]) {
         enemies[i].isGrabbed = false;
         lavaHand.active = false;
@@ -1326,30 +1322,27 @@ function updateLavaTroll() {
     }
   }
 
-  // Safety fallback: Melt player if they fall too deep
   if (player && player.y > 395) {
     if (player.isGrabbed) player.isGrabbed = false;
     handlePlayerDeath();
   }
 
-  // Update Lava Hand Position & Pull Physics
   if (lavaHand.active && lavaHand.target) {
-    // Pull hand horizontally to target
     lavaHand.x += (lavaHand.target.x - lavaHand.x) * 0.12;
-    
-    // Rise hand
+
     if (lavaHand.y > 355) {
       lavaHand.y -= 2.5;
     }
+    // dripping lava from the rising hand
+    if (frame % 4 === 0) {
+      particles.push(new Particle(lavaHand.x + Math.random() * 24, lavaHand.y + 30, C64.orange, 'spark'));
+    }
 
-    // Touch trigger connection grab check
     if (Math.abs(lavaHand.x - lavaHand.target.x) < 22 && Math.abs(lavaHand.y - lavaHand.target.y) < 32) {
       lavaHand.target.isGrabbed = true;
-      
-      // DRAG TARGET DOWN DIRECTLY (Bypasses player update early return freeze)
       lavaHand.target.y += 1.5;
-      lavaHand.target.x += (lavaHand.x - lavaHand.target.x) * 0.2; // pull center
-      
+      lavaHand.target.x += (lavaHand.x - lavaHand.target.x) * 0.2;
+
       if (lavaHand.target.y > 385) {
         lavaHand.target.isGrabbed = false;
         if (lavaHand.target === player) {
@@ -1362,7 +1355,6 @@ function updateLavaTroll() {
       }
     }
   } else {
-    // Return to pool depth
     if (lavaHand.target) {
       lavaHand.target.isGrabbed = false;
       lavaHand.target = null;
@@ -1373,10 +1365,225 @@ function updateLavaTroll() {
   }
 }
 
+// ============================================================
+//  DEMOSCENE VISUAL LAYERS
+// ============================================================
+
+// (5) Parallax starfield
+function drawStarfield(dim) {
+  stars.forEach(s => {
+    s.x -= s.speed;
+    if (s.x < 0) { s.x = 640; s.y = Math.random() * 370; }
+    s.twinkle += 0.15;
+    const bright = 0.25 + s.layer * 0.25 + Math.sin(s.twinkle) * 0.15;
+    ctx.globalAlpha = Math.max(bright * (dim ? 0.5 : 1), 0.05);
+    ctx.fillStyle = s.layer === 2 ? C64.white : (s.layer === 1 ? C64.lightBlue : C64.grey);
+    const sz = s.layer === 2 ? 2 : 1;
+    ctx.fillRect(Math.floor(s.x), Math.floor(s.y), sz, sz);
+  });
+  ctx.globalAlpha = 1;
+}
+
+// (1) Copper / raster bars
+function drawRasterBars(count, alpha, amp) {
+  const t = frame * 0.02;
+  for (let b = 0; b < count; b++) {
+    const cy = 200 + Math.sin(t + b * 0.55) * amp;
+    for (let j = -4; j <= 4; j++) {
+      const fade = 1 - Math.abs(j) / 5;
+      ctx.globalAlpha = alpha * fade;
+      ctx.fillStyle = rainbow(b * 2 + frame * 0.08);
+      ctx.fillRect(0, Math.floor(cy + j * 2), 640, 2);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// (4) Plasma (coarse C64-style colour cell plasma)
+function drawPlasma(alpha) {
+  const t = frame * 0.03;
+  const cell = 20;
+  ctx.globalAlpha = alpha;
+  for (let y = 0; y < 400; y += cell) {
+    for (let x = 0; x < 640; x += cell) {
+      const v = Math.sin(x * 0.012 + t) + Math.sin(y * 0.017 - t * 1.3) +
+                Math.sin((x + y) * 0.009 + t * 0.7);
+      ctx.fillStyle = rainbow(v * 2.2 + frame * 0.05);
+      ctx.fillRect(x, y, cell, cell);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// (14) Perspective checkerboard floor
+function drawCheckerFloor() {
+  const horizon = 295;
+  const t = frame * 0.04;
+  for (let row = 0; row < 12; row++) {
+    const z = (row + 1) / 12;
+    const y = horizon + Math.pow(z, 1.6) * 105;
+    const h = Math.max(Math.pow(z, 1.6) * 18, 2);
+    const tileW = 18 + z * 80;
+    const offset = ((t * 40 * z) % (tileW * 2));
+    for (let x = -tileW * 2 + offset; x < 660; x += tileW * 2) {
+      ctx.fillStyle = (row % 2 === 0) ? C64.purple : C64.blue;
+      ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(tileW), Math.ceil(h));
+      ctx.fillStyle = (row % 2 === 0) ? C64.blue : C64.purple;
+      ctx.fillRect(Math.floor(x + tileW), Math.floor(y), Math.floor(tileW), Math.ceil(h));
+    }
+  }
+}
+
+// (13) Vector balls on a Lissajous path
+function drawVectorBalls() {
+  const t = frame * 0.025;
+  vectorBalls.forEach((b, i) => {
+    const x = 320 + Math.sin(t + b.phase) * 240;
+    const y = 165 + Math.sin(t * 1.7 + b.phase * 2) * 80;
+    const scale = 0.7 + Math.sin(t * 1.3 + b.phase) * 0.3;
+    // shaded sphere from concentric circles
+    const cols = [C64.darkGrey, C64.grey, C64.lightGrey, C64.white];
+    for (let r = 0; r < 4; r++) {
+      ctx.fillStyle = cols[r];
+      ctx.beginPath();
+      ctx.arc(x - r * 2 * scale, y - r * 2 * scale, (12 - r * 2.6) * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+}
+
+// (15) Interference circles (moire rings)
+function drawInterference(alpha) {
+  const t = frame * 0.02;
+  ctx.globalAlpha = alpha;
+  ctx.lineWidth = 1;
+  const cx1 = 320 + Math.sin(t) * 150, cy1 = 200 + Math.cos(t * 0.8) * 90;
+  const cx2 = 320 - Math.sin(t * 1.1) * 150, cy2 = 200 - Math.cos(t * 0.9) * 90;
+  ctx.strokeStyle = C64.cyan;
+  for (let r = 8; r < 280; r += 16) {
+    ctx.beginPath(); ctx.arc(cx1, cy1, r, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.strokeStyle = C64.purple;
+  for (let r = 8; r < 280; r += 16) {
+    ctx.beginPath(); ctx.arc(cx2, cy2, r, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// (7) Bouncing rainbow logo (DYCP-style: each letter on its own sine)
+function drawBigLogo(text, baseY, t) {
+  ctx.save();
+  ctx.font = '42px "Press Start 2P"';
+  ctx.textAlign = 'center';
+  const total = text.length;
+  const spacing = 52;
+  const startX = 320 - ((total - 1) * spacing) / 2;
+  for (let i = 0; i < total; i++) {
+    const y = baseY + Math.sin(t * 2.4 + i * 0.65) * 16;
+    const x = startX + i * spacing;
+    // hard pixel shadow
+    ctx.fillStyle = C64.darkGrey;
+    ctx.fillText(text[i], x + 4, y + 4);
+    // colour-cycled letter
+    ctx.fillStyle = rainbow(frame * 0.15 + i * 1.5);
+    ctx.fillText(text[i], x, y);
+    // glint scanline through letter
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    const glintY = y - 30 + ((frame * 2 + i * 17) % 50);
+    ctx.fillRect(x - 22, glintY, 44, 2);
+  }
+  ctx.restore();
+}
+
+// (2) Sine scroller
+function drawScroller(y) {
+  ctx.save();
+  ctx.font = '14px "Press Start 2P"';
+  scrollX -= 1.6;
+  if (scrollX < -SCROLL_TEXT.length * 16) scrollX = 660;
+  for (let i = 0; i < SCROLL_TEXT.length; i++) {
+    const cx = scrollX + i * 16;
+    if (cx < -20 || cx > 660) continue;
+    const cy = y + Math.sin(frame * 0.07 + cx * 0.025) * 10;
+    ctx.fillStyle = C64.darkGrey;
+    ctx.fillText(SCROLL_TEXT[i], cx + 2, cy + 2);
+    ctx.fillStyle = rainbow(frame * 0.2 + i);
+    ctx.fillText(SCROLL_TEXT[i], cx, cy);
+  }
+  ctx.restore();
+}
+
+// (8) Glitch / trash-noise transition frame
+function drawGlitch(intensity) {
+  // horizontal slice displacement (copies of the live framebuffer)
+  for (let i = 0; i < 8 * intensity; i++) {
+    const sy = Math.random() * 400;
+    const sh = Math.random() * 18 + 2;
+    const shift = (Math.random() - 0.5) * 90 * intensity;
+    try {
+      ctx.drawImage(canvas, 0, sy, 640, sh, shift, sy, 640, sh);
+    } catch (e) { /* canvas not ready */ }
+  }
+  // trash colour bands
+  for (let i = 0; i < 10 * intensity; i++) {
+    ctx.globalAlpha = Math.random() * 0.5;
+    ctx.fillStyle = rainbow(Math.random() * 10);
+    ctx.fillRect(0, Math.random() * 400, 640, Math.random() * 8 + 1);
+  }
+  // static noise pixels
+  ctx.globalAlpha = 0.7;
+  for (let i = 0; i < 350 * intensity; i++) {
+    ctx.fillStyle = Math.random() < 0.5 ? '#FFFFFF' : rainbow(Math.random() * 10);
+    ctx.fillRect(Math.random() * 640, Math.random() * 400, 2, 2);
+  }
+  // rolling sync bar
+  ctx.globalAlpha = 0.25;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, (frame * 13) % 400, 640, 26);
+  ctx.globalAlpha = 1;
+}
+
+// (12) Big wavy rainbow text (wave clear etc.)
+function drawWavyBigText(text, cx, cy, size) {
+  ctx.save();
+  ctx.font = `${size}px "Press Start 2P"`;
+  ctx.textAlign = 'center';
+  const spacing = size * 1.15;
+  const startX = cx - ((text.length - 1) * spacing) / 2;
+  for (let i = 0; i < text.length; i++) {
+    const y = cy + Math.sin(frame * 0.15 + i * 0.7) * 8;
+    ctx.fillStyle = C64.black;
+    ctx.fillText(text[i], startX + i * spacing + 3, y + 3);
+    ctx.fillStyle = rainbow(frame * 0.25 + i * 1.2);
+    ctx.fillText(text[i], startX + i * spacing, y);
+  }
+  ctx.restore();
+}
+
+// --- Demo attract screen (menu / game over background) ---
+function drawDemoScreen() {
+  ctx.fillStyle = C64.black;
+  ctx.fillRect(0, 0, 640, 400);
+
+  drawPlasma(0.16);
+  drawStarfield(false);
+  drawRasterBars(5, 0.22, 150);
+  drawInterference(0.08);
+  drawCheckerFloor();
+  drawVectorBalls();
+  drawBigLogo('JOUST', 120, frame * 0.025);
+  drawScroller(355);
+
+  // corner sparkles
+  if (frame % 5 === 0) {
+    particles.push(new Particle(Math.random() * 640, Math.random() * 280, rainbow(frame), 'trail'));
+  }
+  particles.forEach(p => { p.update(); p.draw(); });
+  particles = particles.filter(p => p.life > 0);
+}
+
 // --- Draw Functions ---
 function drawWorld() {
-  ctx.save();
-  
   if (screenShakeIntensity > 0) {
     const dx = (Math.random() - 0.5) * screenShakeIntensity;
     const dy = (Math.random() - 0.5) * screenShakeIntensity;
@@ -1387,18 +1594,29 @@ function drawWorld() {
 
   // Background Space
   ctx.fillStyle = C64.black;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(-20, -20, canvas.width + 40, canvas.height + 40);
 
-  // Lava magma
+  // demo layers behind the playfield
+  drawStarfield(true);
+  drawRasterBars(3, 0.08, 120);
+
+  // Lava magma — colour-cycled surface
   ctx.fillStyle = C64.red;
   ctx.fillRect(0, 384, canvas.width, 16);
-  ctx.fillStyle = C64.orange;
   const waveOffset = Math.sin(Date.now() / 150) * 5;
   for (let i = 0; i < canvas.width; i += 16) {
+    // per-tile colour cycling shimmer
+    ctx.fillStyle = (Math.floor(i / 16 + frame * 0.2) % 3 === 0) ? C64.yellow : C64.orange;
     ctx.fillRect(i, 382 + waveOffset, 16, 4);
   }
+  // lava glow gradient
+  const glow = ctx.createLinearGradient(0, 350, 0, 400);
+  glow.addColorStop(0, 'rgba(200,100,0,0)');
+  glow.addColorStop(1, `rgba(200,100,0,${0.25 + Math.sin(frame * 0.1) * 0.1})`);
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 350, canvas.width, 50);
 
-  // Draw lava heat ripples animation
+  // Lava heat ripples
   ctx.fillStyle = 'rgba(200, 70, 0, 0.2)';
   lavaRipples.forEach(rip => {
     ctx.fillRect(rip.x, rip.y, rip.w, 2);
@@ -1409,44 +1627,88 @@ function drawWorld() {
     }
   });
 
-  // Platforms
+  // Platforms with colour-cycled edge highlight
   platforms.forEach(plat => {
     ctx.fillStyle = C64.brown;
     ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
     ctx.fillStyle = C64.orange;
     ctx.fillRect(plat.x, plat.y, plat.w, 3);
+    // running highlight pixel (light chaser along the platform edge)
+    const lx = plat.x + ((frame * 2) % plat.w);
+    ctx.fillStyle = C64.yellow;
+    ctx.fillRect(lx, plat.y, 8, 3);
   });
 
-  // Score HUD
+  // Score HUD with pop animation
+  ctx.save();
+  ctx.font = '12px "Press Start 2P"';
+  const pop = 1 + (scorePop > 0 ? scorePop * 0.02 : 0);
+  if (scorePop > 0) scorePop--;
+  ctx.translate(15, 25);
+  ctx.scale(pop, pop);
+  ctx.fillStyle = scorePop > 0 ? rainbow(frame) : C64.yellow;
+  ctx.fillText(`SCORE: ${String(score).padStart(6, '0')}`, 0, 0);
+  ctx.restore();
+
   ctx.font = '12px "Press Start 2P"';
   ctx.fillStyle = C64.yellow;
-  ctx.fillText(`SCORE: ${String(score).padStart(6, '0')}`, 15, 25);
   ctx.fillText(`HIGH: ${String(highScore).padStart(6, '0')}`, 260, 25);
   ctx.fillStyle = C64.cyan;
   ctx.fillText(`WAVE: ${wave}`, 530, 25);
 
-  // Lives ostriches
-  ctx.fillStyle = C64.white;
+  // Lives ostriches (blink red when only one left)
+  ctx.fillStyle = (lives === 1 && Math.floor(frame / 15) % 2 === 0) ? C64.red : C64.white;
   for (let i = 0; i < lives; i++) {
     ctx.fillRect(15 + i * 20, 36, 12, 10);
   }
 
-  // Animated Lava Troll Hand (Multi-jointed fingers flex)
+  // Animated Lava Troll Hand
   if (lavaHand.y < 420) {
     ctx.fillStyle = C64.orange;
-    ctx.fillRect(lavaHand.x, lavaHand.y, 24, 40); // Arm body
-    
-    // Procedural flexing joint fingers
+    ctx.fillRect(lavaHand.x, lavaHand.y, 24, 40);
     ctx.fillStyle = C64.red;
     const flex = Math.sin(Date.now() / 100) * 3;
-    ctx.fillRect(lavaHand.x - 2, lavaHand.y - 4 + flex, 4, 12);      // Left finger
-    ctx.fillRect(lavaHand.x + 10, lavaHand.y - 6 + flex/2, 4, 12);  // Middle finger
-    ctx.fillRect(lavaHand.x + 22, lavaHand.y - 4 + flex, 4, 12);     // Right finger
+    ctx.fillRect(lavaHand.x - 2, lavaHand.y - 4 + flex, 4, 12);
+    ctx.fillRect(lavaHand.x + 10, lavaHand.y - 6 + flex / 2, 4, 12);
+    ctx.fillRect(lavaHand.x + 22, lavaHand.y - 4 + flex, 4, 12);
   }
 }
 
 // --- Main Engine Loop ---
 function update() {
+  frame++;
+
+  if (gameState === 'MENU' || gameState === 'GAME_OVER') {
+    drawDemoScreen();
+    requestAnimationFrame(update);
+    return;
+  }
+
+  ctx.save();
+
+  if (gameState === 'TRANSITION') {
+    transition.t++;
+    // first half: glitch over old frame; midway: run callback; second half: glitch fades
+    if (!transition.fired && transition.t >= transition.dur / 2) {
+      transition.cb();
+      transition.fired = true;
+    }
+    drawWorld();
+    if (player && transition.fired) player.draw();
+    enemies.forEach(e => e.draw());
+    const half = transition.dur / 2;
+    const intensity = 1 - Math.abs(transition.t - half) / half; // ramp up then down
+    drawGlitch(Math.max(intensity, 0.15));
+    if (transition.t >= transition.dur) {
+      gameState = transition.next;
+      transition = null;
+      triggerBorderFlash('flash-yellow');
+    }
+    ctx.restore();
+    requestAnimationFrame(update);
+    return;
+  }
+
   if (gameState === 'PLAYING') {
     survivalTimer++;
 
@@ -1458,7 +1720,7 @@ function update() {
 
     if (player) player.update();
     enemies.forEach(enemy => enemy.update());
-    
+
     eggs = eggs.filter(egg => egg.update());
     powerups.forEach(pw => pw.update());
 
@@ -1476,26 +1738,38 @@ function update() {
     checkJoustCollisions();
     updateLavaTroll();
 
-    // Clears wave IMMEDIATELY when all enemies are dead
-    if (enemies.length === 0) {
+    if (enemies.length === 0 && gameState === 'PLAYING') {
       gameState = 'WAVE_CLEAR';
-      waveTimer = 100;
+      waveTimer = 130;
       synth.playVictory();
+      // celebration fireworks
+      for (let i = 0; i < 4; i++) {
+        explosionBurst(100 + Math.random() * 440, 80 + Math.random() * 150, rainbow(i * 3), 20);
+      }
     }
-  } 
+  }
   else if (gameState === 'WAVE_CLEAR') {
     waveTimer--;
+    particles.forEach(p => p.update());
+    particles = particles.filter(p => p.life > 0);
+    floatingTexts.forEach(t => t.update());
+    floatingTexts = floatingTexts.filter(t => t.alpha > 0);
+    // ongoing fireworks
+    if (waveTimer % 25 === 0) {
+      explosionBurst(100 + Math.random() * 440, 60 + Math.random() * 160, rainbow(waveTimer), 18);
+      synth.playCollect();
+    }
     if (waveTimer <= 0) {
-      wave++;
-      spawnWave();
-      gameState = 'PLAYING';
+      startTransition(() => {
+        wave++;
+        spawnWave();
+      }, 'PLAYING');
     }
   }
 
-  // Draw entities
   drawWorld();
-  
-  if (player && gameState === 'PLAYING') player.draw();
+
+  if (player && (gameState === 'PLAYING' || gameState === 'WAVE_CLEAR')) player.draw();
   enemies.forEach(enemy => enemy.draw());
   eggs.forEach(egg => egg.draw());
   powerups.forEach(pw => pw.draw());
@@ -1503,7 +1777,12 @@ function update() {
   particles.forEach(p => p.draw());
   floatingTexts.forEach(t => t.draw());
 
-  ctx.restore(); // restore screenshake
+  if (gameState === 'WAVE_CLEAR') {
+    drawWavyBigText(`WAVE ${wave} CLEAR!`, 320, 190, 24);
+    drawScroller(250);
+  }
+
+  ctx.restore();
 
   requestAnimationFrame(update);
 }
@@ -1512,9 +1791,9 @@ function update() {
 function updateLeaderboardUI() {
   const listEl = document.getElementById('leaderboardList');
   listEl.innerHTML = '';
-  
+
   const leaderboard = JSON.parse(localStorage.getItem('joust_leader') || '[]');
-  
+
   if (leaderboard.length === 0) {
     const defaults = [
       { name: 'SKE', score: 15000 },
@@ -1535,13 +1814,13 @@ function updateLeaderboardUI() {
 function submitScore() {
   const initials = document.getElementById('initialsInput').value.substring(0, 3).toUpperCase() || 'AAA';
   let leaderboard = JSON.parse(localStorage.getItem('joust_leader') || '[]');
-  
+
   leaderboard.push({ name: initials, score: score });
   leaderboard.sort((a, b) => b.score - a.score);
   leaderboard = leaderboard.slice(0, 5);
-  
+
   localStorage.setItem('joust_leader', JSON.stringify(leaderboard));
-  
+
   document.getElementById('nameEntryContainer').classList.add('hidden');
   updateLeaderboardUI();
 }
@@ -1556,13 +1835,15 @@ function startGame() {
   synth.init();
   document.getElementById('startOverlay').classList.add('hidden');
   document.getElementById('gameOverOverlay').classList.add('hidden');
-  
+
   score = 0;
   lives = 3;
   wave = 1;
   player = new Player();
-  spawnWave();
-  gameState = 'PLAYING';
+  // glitch-noise transition into the game
+  startTransition(() => {
+    spawnWave();
+  }, 'PLAYING');
 }
 
 document.getElementById('startBtn').addEventListener('click', startGame);

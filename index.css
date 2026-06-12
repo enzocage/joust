@@ -35,6 +35,26 @@ h1 {
   color: #f5bde6;
   text-shadow: 0 0 10px rgba(245, 189, 230, 0.6), 3px 3px 0px #5b3e94;
   letter-spacing: -1px;
+  position: relative;
+  animation: hueCycle 6s linear infinite, glitchJump 4s steps(1) infinite;
+}
+
+/* Demo-scene colour cycling on the page title */
+@keyframes hueCycle {
+  0%   { color: #f5bde6; }
+  20%  { color: #d8c450; }
+  40%  { color: #b4e880; }
+  60%  { color: #68b0c0; }
+  80%  { color: #a0b0e0; }
+  100% { color: #f5bde6; }
+}
+
+/* Occasional RGB-split glitch twitch */
+@keyframes glitchJump {
+  0%, 92%, 100% { transform: translate(0, 0); text-shadow: 0 0 10px rgba(245, 189, 230, 0.6), 3px 3px 0px #5b3e94; }
+  93% { transform: translate(-3px, 1px); text-shadow: 3px 0 0 #b33629, -3px 0 0 #68b0c0; }
+  95% { transform: translate(3px, -1px); text-shadow: -3px 0 0 #d8c450, 3px 0 0 #603c90; }
+  97% { transform: translate(-1px, 0); text-shadow: 2px 0 0 #b33629, -2px 0 0 #68b0c0; }
 }
 
 p.subtitle {
@@ -63,6 +83,41 @@ p.subtitle {
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+/* Music toggle button */
+.music-toggle {
+  position: absolute;
+  top: -14px;
+  right: 18px;
+  z-index: 20;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.6rem;
+  color: #ffffff;
+  background-color: #5b3e94;
+  border: 3px solid #f5bde6;
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #3a2267;
+  transition: all 0.15s ease;
+}
+
+.music-toggle:hover {
+  background-color: #6e4fa8;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 #3a2267;
+}
+
+.music-toggle:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #3a2267;
+}
+
+.music-toggle.muted {
+  background-color: #3e4259;
+  border-color: #808080;
+  color: #b0b0b0;
 }
 
 /* The famous C64 Border area */
@@ -151,8 +206,8 @@ p.subtitle {
   justify-content: center;
   align-items: center;
   z-index: 6;
-  background: rgba(10, 8, 20, 0.88);
-  backdrop-filter: blur(4px);
+  background: rgba(10, 8, 20, 0.45);
+  backdrop-filter: blur(1px);
   text-align: center;
   padding: 20px;
   transition: opacity 0.3s ease;
@@ -169,7 +224,13 @@ p.subtitle {
   font-size: 1.5rem;
   color: #f5bde6;
   margin-bottom: 15px;
-  animation: pulse 1.5s infinite alternate;
+  animation: pulse 1.5s infinite alternate, hueCycle 5s linear infinite;
+}
+
+.instructions-panel,
+#nameEntryContainer,
+#finalScore {
+  background: rgba(10, 8, 20, 0.75);
 }
 
 .retro-btn {
